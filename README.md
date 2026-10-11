@@ -233,3 +233,53 @@ Follow the full interactive demo walkthrough documented in **[`demo.md`](file://
 ## 📄 License
 Built for the **Razorpay Buildathon 2026** — Track 04 (AI Finance Controller).
 Distributed under the MIT License.
+
+---
+## 📡 NeatLogs & CFO.AI Integration
+
+### NeatLogs Structured Telemetry
+The backend emits immutable, time-stamped event logs via the **NeatLogs** engine, providing full visibility into every stage of the financial pipeline:
+
+- **Event Levels**: `INFO`, `SUCCESS`, `WARN`, `ERROR`, `RECON` (reconciliation events), `AI_DECISION` (LLM diagnostic events), `AUDIT` (chain events)
+- **Emission Points**:
+  - `reconciler.py` — 3-tier cascade events (`recon` for cascade start, `success` for completion, counts per tier)
+  - `cash_forecaster.py` — 30-day runway forecast events with risk level and days_to_zero
+  - `simulator.py` — what-if simulation events (`min_cash`, `net_cash_variance`, `days_to_zero`)
+  - `copilot.py` — AI Q&A events (`model` used, `llm_used` flag)
+  - `orchestrator.py` — pipeline trace events (`PIPELINE_RUN` status, stage metrics)
+  - `reconciler.py` — DynamicRule application events (`VENDOR_MAP` applied, `REGEX_STRIP` applied)
+- **Consumption**: Frontend NeatLogs page (`/api/neatlogs`) supports search by category (System/Database/Ingestion/ReconciliationEngine/CFO.AI/AuditChain/HTTP) and real-time stream ticker.
+
+### CFO.AI Agentic Finance Controller
+LedgerIQ functions as an **autonomous AI Finance Controller** under the CFO.AI brand (Razorpay Buildathon Track 04). The system closes multi-source reconciliation loops with minimal human intervention:
+
+1. **Ingestion Agent** — Concurrently fetches and normalizes Bank, Razorpay Gateway, and ERP invoice feeds. Runs Ollama entity name normalization to strip OCR noise and standardize vendor names.
+
+2. **3-Tier Cascade Reconciler** —
+   - **Tier 1 (Exact SQL Match)**: Direct indexed match on reference codes, amounts, and dates (±1 day), confidence `1.00`.
+   - **Tier 2 (Subset-Sum Aggregator)**: Dynamic programming solving 1-to-many lump payout settlements (`1 lump deposit = Σ N invoices − 2% gateway fee`), confidence `0.92`.
+   - **Tier 3 (RapidFuzz Composite Match)**: High-speed C++ token-sort fuzzy semantic matching across merchant aliases and dirty ERP strings, threshold ≥ `0.75` (enabled by weight redistribution fix).
+
+3. **AI Exception Diagnostics** — Kimi-k2.6:cloud LLM agent processes every PENDING exception, producing `ai_diagnosis`, `recommended_action`, and `drafted_journal_entry` (double-entry GL adjustments). Falls back to heuristic analysis if LLM unavailable.
+
+4. **Human-in-the-Loop Resolution** — Controller reviews AI diagnoses, approves/rejects recommended journal entries, and triggers `RULE_SYNTHESIZED` adaptive rule events for future automation.
+
+5. **30-Day Cash Runway & Stress Forecaster** — Predictive forward liquidity using verified settled cash (C0), risk-weighted pending receivables (P_COLLECT: LOW=0.95, MEDIUM=0.70, HIGH=0.30), and outflows. What-If stress simulation models collection delays, counterparty defaults, and gateway fee surges via slider controls.
+
+6. **Immutable Audit Trail** — Every automated match, AI diagnosis, and human resolution is permanently written to an append-only SHA-256 event log for regulatory compliance and forensic inspection.
+
+### Agentic Orchestrator
+Run the full pipeline in one atomic call:
+
+```bash
+curl -s -X POST "http://localhost:8000/api/agent/orchestrate/{batch_id}"
+```
+
+Stages:
+1. **RECONCILE** — 3-tier cascade + risk triage (SYSTEM_RECONCILER)
+2. **DIAGNOSE** — LLM diagnostics on PENDING exceptions (DIAGNOSTIC_AGENT)
+3. **FORECAST** — 30-day cash runway + liquidity posture (FORECASTER)
+
+Returns per-stage status, metrics, overall result, and writes immutable audit + NeatLogs telemetry.
+
+---
