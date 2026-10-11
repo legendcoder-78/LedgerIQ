@@ -1,6 +1,6 @@
 import uuid
 from datetime import date
-from typing import Optional
+from typing import Any, Optional
 
 from pydantic import BaseModel, ConfigDict
 
@@ -12,6 +12,15 @@ class RiskBreakdown(BaseModel):
     high: int
     medium: int
     low: int
+
+
+# ---------------------------------------------------------------------------
+# Tier cascade breakdown
+# ---------------------------------------------------------------------------
+class TierBreakdown(BaseModel):
+    tier1_exact: int = 0
+    tier2_one_to_many: int = 0
+    tier3_fuzzy: int = 0
 
 
 # ---------------------------------------------------------------------------
@@ -42,6 +51,10 @@ class ReconciliationSummaryOut(BaseModel):
     match_rate: float
     risk_breakdown: RiskBreakdown
 
+    # UI-facing extras
+    resolved_count: int = 0
+    tier_breakdown: TierBreakdown = TierBreakdown()
+
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -61,6 +74,10 @@ class ExceptionOut(BaseModel):
     ai_diagnosis: Optional[str]
     recommended_action: Optional[str]
     status: str                   # 'PENDING' | 'APPROVED' | 'REJECTED'
+
+    # UI-facing fields
+    entity_name: Optional[str] = None
+    drafted_journal_entry: Optional[dict[str, Any]] = None
 
     model_config = ConfigDict(from_attributes=True)
 

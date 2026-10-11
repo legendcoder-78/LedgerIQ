@@ -175,6 +175,8 @@ python run.py
 * Interactive Swagger Docs: **`http://localhost:8000/docs`**
 * Health Check: **`http://localhost:8000/health`**
 
+> **Windows note:** The event-loop policy (`WindowsSelectorEventLoopPolicy`) is set automatically in `backend/run.py` and `backend/app/main.py` to avoid asyncpg SSL/Proactor noise on shutdown/reload — no manual `PYTHONPATH` or env tweak needed.
+
 ---
 
 ### Step 4: Start the Frontend Client
@@ -199,6 +201,16 @@ source .venv/bin/activate
 python scripts/benchmark_e2e.py
 ```
 
+**Expected distribution** (generated with `python -m app.services.synthetic_generator`):
+- **20 BANK** records, **10 GATEWAY**, **35 INVOICE** (65 total)
+- Match breakdown after reconciliation:
+  - **Tier 1 (Exact):** 10 bank–invoice pairs (confidence 1.00)
+  - **Tier 2 (One-to-Many):** 5 gateway lump settlements vs 15 invoices (subset-sum, confidence 0.92)
+  - **Tier 3 (Fuzzy):** 5 bank–invoice pairs with dirty names/missing refs (RapidFuzz composite ≥ 0.75, enabled by weight redistribution fix)
+  - **Exception:** 15 unmatched records requiring AI diagnosis
+
+The bench script (`scripts/benchmark_e2e.py`) will regenerate a fresh batch, run the 3-tier cascade, risk triage, AI diagnostics, and 30-day runway forecast, then output match accuracy, tier counts, and audit-entry verification.
+
 ---
 
 ## 🎬 Demonstrating LedgerIQ
@@ -213,6 +225,8 @@ Follow the full interactive demo walkthrough documented in **[`demo.md`](file://
 6. **Forward Cash Stress Forecaster**: What-If scenario simulations for payout delays, refund surges, and expense shifts.
 7. **Tamper-Evident SHA-256 Audit Trail**: Inspect cryptographic blocks and export audit reports.
 8. **Conversational Copilot**: Context-aware Q&A on active financial batch metrics.
+
+9. **Agentic Orchestrator**: Run `POST /api/agent/orchestrate/{batch_id}` to execute reconcile → diagnose → forecast in one call (new in this release).
 
 ---
 

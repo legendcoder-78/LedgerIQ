@@ -17,9 +17,11 @@ class CopilotSource(BaseModel):
     label: str
     amount: float | None = None
     risk_score: str | None = None
+    identifier: str | None = None   # UI alias for `id`
 
 
 class CopilotResponse(BaseModel):
     reply: str
     sources: list[CopilotSource] = []
     llm_used: bool = True
+    model: str | None = None

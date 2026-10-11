@@ -1,18 +1,23 @@
 """
 synthetic_generator.py
 ======================
-Generates 55+ realistic multi-source financial records across three sources:
+Generates a realistic multi-source financial batch across three sources:
 
   • BANK    (20 records) – raw deposit logs, lump transfers, periodic fees
-  • GATEWAY (15 records) – Razorpay settlement payouts (gross minus 2% fee, T+1 lag)
-  • INVOICE (20 records) – ERP invoices with dirty names / typos, missing refs,
+  • GATEWAY (10 records) – Razorpay settlement payouts (gross minus 2% fee, T+1 lag)
+  • INVOICE (35 records) – ERP invoices with dirty names / typos, missing refs,
                            split-payment groupings
 
-Intended match distribution stored in metadata_json.intended_match_type:
-  • EXACT        – 10 BANK/GATEWAY pairs with identical ref + amount + date (±1 day)
-  • ONE_TO_MANY  –  5 BANK lump deposits each splitting into 3 INVOICE records
-  • FUZZY        –  5 BANK/INVOICE pairs with intentional name typos
-  • EXCEPTION    – 15 orphan/anomalous records that Phase 2 SHOULD NOT match
+Intended match distribution stored in metadata_json.intended_match_type, aligned
+to the 3-tier reconciler cascade:
+
+  • EXACT        – 10 BANK + INVOICE pairs with identical ref + amount + date
+                   (Tier 1 exact SQL match, confidence 1.00)
+  • ONE_TO_MANY  –  5 GATEWAY net payouts each splitting into 3 INVOICE records
+                   (Tier 2 subset-sum, deposit ≈ Σ invoices × (1 − fee))
+  • FUZZY        –  5 BANK + INVOICE pairs with intentional name typos / missing
+                   invoice ref (Tier 3 RapidFuzz composite score ≥ 0.75)
+  • EXCEPTION    – 15 orphan/anomalous records that MUST NOT match
 """
 
 import random
@@ -235,45 +240,36 @@ def _make_invoice_record(
 def generate_synthetic_batch(batch_id: uuid.UUID) -> list[dict[str, Any]]:
     """
     Returns a list of raw record dicts ready for ORM insertion.
-    Total: 55 records (20 BANK + 15 GATEWAY + 20 INVOICE).
+    Total: 65 records (20 BANK + 10 GATEWAY + 35 INVOICE).
     """
     records: list[dict[str, Any]] = []
 
     # ------------------------------------------------------------------
-    # GROUP A: 10 EXACT match pairs  →  BANK (10) + GATEWAY (10)
+    # GROUP A: 10 EXACT match pairs  →  BANK (10) + INVOICE (10)
+    # Each pair shares an identical reference, amount and date (±1 day),
+    # so the Tier 1 exact SQL matcher resolves them at confidence 1.00.
     # ------------------------------------------------------------------
     for i in range(10):
         merchant = MERCHANTS[i % len(MERCHANTS)]
         amount = _round2(random.uniform(5_000, 80_000))
-        ref = f"TXN-{1000 + i:04d}"
+        ref = f"RCV-{1000 + i:04d}"
         txn_date = _rand_date(i * 2)
         group = f"exact-{i}"
 
-        bank_rec = _make_bank_record(
-            batch_id, merchant, amount, ref, txn_date, "EXACT", group
+        records.append(
+            _make_bank_record(batch_id, merchant, amount, ref, txn_date, "EXACT", group)
         )
-        records.append(bank_rec)
-
-        # Gateway: same ref, same NET amount (bank receives net), date T+1
-        gw_rec = _make_gateway_record(
-            batch_id,
-            merchant,
-            amount,      # gross = bank amount (bank records net after fee deduction)
-            ref,
-            txn_date,
-            "EXACT",
-            group,
+        records.append(
+            _make_invoice_record(batch_id, merchant, amount, ref, txn_date, "EXACT", group)
         )
-        # Override: for EXACT match the gateway net = bank amount exactly
-        gw_rec["amount"] = amount
-        records.append(gw_rec)
 
     # ------------------------------------------------------------------
-    # GROUP B: 5 ONE-TO-MANY  →  BANK lump (5) + INVOICE splits (15)
-    # Each lump = sum of 3 invoices (gateway already took 2% fee)
+    # GROUP B: 5 ONE-TO-MANY  →  GATEWAY payout (5) + INVOICE splits (15)
+    # Each gateway net payout = Σ 3 invoices × (1 − 2% fee), so the Tier 2
+    # subset-sum matcher resolves the lump against its invoice cluster.
     # ------------------------------------------------------------------
     for i in range(5):
-        merchant = MERCHANTS[(10 + i) % len(MERCHANTS)]
+        merchant = MERCHANTS[(5 + i) % len(MERCHANTS)]
         group = f"otm-{i}"
         invoice_amounts = [
             _round2(random.uniform(3_000, 15_000)) for _ in range(3)
@@ -283,13 +279,14 @@ def generate_synthetic_batch(batch_id: uuid.UUID) -> list[dict[str, Any]]:
         lump_date = _rand_date(20 + i * 3)
         ref = f"LUMP-{2000 + i:04d}"
 
-        # Bank receives the net lump
-        bank_rec = _make_bank_record(
-            batch_id, merchant, net_lump, ref, lump_date, "ONE_TO_MANY", group
+        # Gateway settlement: net of the 2% processing fee
+        gw_rec = _make_gateway_record(
+            batch_id, merchant, gross_total, ref, lump_date, "ONE_TO_MANY", group
         )
-        records.append(bank_rec)
+        gw_rec["amount"] = net_lump      # pin the exact net payout
+        records.append(gw_rec)
 
-        # Three invoices — dirty names, missing ref prefix
+        # Three invoices forming the gross total, dated within ±3 days
         for j, inv_amount in enumerate(invoice_amounts):
             inv_ref = f"INV-{3000 + i * 10 + j:04d}" if j % 2 == 0 else None
             inv_rec = _make_invoice_record(
@@ -297,7 +294,7 @@ def generate_synthetic_batch(batch_id: uuid.UUID) -> list[dict[str, Any]]:
                 merchant,
                 inv_amount,
                 inv_ref,
-                lump_date - timedelta(days=random.randint(1, 5)),
+                lump_date - timedelta(days=random.randint(0, 2)),
                 "ONE_TO_MANY",
                 group,
                 dirty=True,

@@ -27,6 +27,13 @@ import sys
 import time
 from typing import Any, Optional
 
+if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+        sys.stderr.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+
 # ---------------------------------------------------------------------------
 # Conditional imports — gracefully degrade if rich is not available
 # ---------------------------------------------------------------------------
@@ -37,7 +44,7 @@ try:
     from rich.progress import Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
     from rich import box
     RICH_AVAILABLE = True
-    console = Console()
+    console = Console(legacy_windows=False)
 except ImportError:
     RICH_AVAILABLE = False
     console = None  # type: ignore

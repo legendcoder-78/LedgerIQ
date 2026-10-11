@@ -36,6 +36,7 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import DynamicRule, ExceptionItem, FinancialRecord, RecordMatch, ReconciliationBatch
+from app.neatlogs import neatlogs
 
 logger = logging.getLogger(__name__)
 
@@ -124,22 +125,40 @@ def _score_date(d1: date, d2: date) -> float:
 
 
 def _composite_score(a: _Rec, b: _Rec) -> tuple[float, str]:
-    """Returns (score, human-readable reasoning_trace)."""
+    """
+    Returns (score, human-readable reasoning_trace).
+
+    Weights: amount 0.40, ref 0.30, name 0.20, date 0.10.
+
+    The reference signal is only counted when BOTH records carry a reference
+    code. When either side is missing it (a common real-world ERP/bank-feed
+    gap) the remaining signals are re-normalised so a strong amount + name +
+    date agreement can still clear the threshold. Without this, a missing-ref
+    pair is mathematically capped at 0.70 and could NEVER reach 0.75.
+    """
     s_amount = _score_amount(a.amount, b.amount)
-    s_ref    = _score_ref(a.reference_code, b.reference_code)
-    s_name   = _score_name(
+    s_name = _score_name(
         a.normalized_entity_name or a.raw_entity_name,
         b.normalized_entity_name or b.raw_entity_name,
     )
-    s_date   = _score_date(a.transaction_date, b.transaction_date)
+    s_date = _score_date(a.transaction_date, b.transaction_date)
 
-    C = 0.40 * s_amount + 0.30 * s_ref + 0.20 * s_name + 0.10 * s_date
+    weighted = 0.40 * s_amount + 0.20 * s_name + 0.10 * s_date
+    total_weight = 0.70
+
+    has_ref = bool(a.reference_code and b.reference_code)
+    s_ref = _score_ref(a.reference_code, b.reference_code) if has_ref else None
+    if has_ref:
+        weighted += 0.30 * s_ref            # type: ignore[operator]
+        total_weight += 0.30
+
+    C = weighted / total_weight
 
     name_pct = round(s_name * 100)
     ref_info = (
-        f"ref similarity {round(s_ref * 100)}%"
-        if (a.reference_code and b.reference_code)
-        else "no reference codes to compare"
+        f"ref similarity {round(s_ref * 100)}%"   # type: ignore[arg-type]
+        if has_ref
+        else "no reference codes to compare (weights re-normalised)"
     )
     trace = (
         f"Fuzzy composite score {round(C * 100)}%: "
@@ -189,6 +208,7 @@ class ReconciliationEngine:
     async def run(self) -> ReconciliationResult:
         records = await self._fetch_unmatched()
         if not records:
+            neatlogs.warn("ReconciliationEngine", f"Batch {self.batch_id}: no UNMATCHED records to reconcile.")
             return ReconciliationResult(
                 total_records=0,
                 matched_ids=set(),
@@ -198,8 +218,15 @@ class ReconciliationEngine:
                 tier3_count=0,
             )
 
+        neatlogs.recon(
+            f"Batch {self.batch_id}: beginning 3-tier cascade over {len(records)} unmatched records.",
+            {"batch_id": str(self.batch_id), "records": len(records)},
+        )
+
         # ── Pre-Tier-1: Apply DynamicRules ───────────────────────────────────
-        await self._apply_dynamic_rules(records)
+        rules_applied = await self._apply_dynamic_rules(records)
+        if rules_applied:
+            neatlogs.recon(f"Applied {rules_applied} adaptive DynamicRule(s) before matching.")
 
         matched_ids: set[uuid.UUID] = set()
         all_matches: list[_Match] = []
@@ -207,14 +234,17 @@ class ReconciliationEngine:
         # ── Tier 1: Exact ────────────────────────────────────────────────────
         t1_matches = self._tier1_exact(records, matched_ids)
         all_matches.extend(t1_matches)
+        neatlogs.recon(f"Tier 1 (Exact) → {len(t1_matches)} match(es) (confidence 1.00).")
 
         # ── Tier 2: One-to-Many ──────────────────────────────────────────────
         t2_matches = self._tier2_one_to_many(records, matched_ids)
         all_matches.extend(t2_matches)
+        neatlogs.recon(f"Tier 2 (Subset-Sum One-to-Many) → {len(t2_matches)} match(es) (confidence 0.92).")
 
         # ── Tier 3: Fuzzy ────────────────────────────────────────────────────
         t3_matches = self._tier3_fuzzy(records, matched_ids)
         all_matches.extend(t3_matches)
+        neatlogs.recon(f"Tier 3 (RapidFuzz Fuzzy) → {len(t3_matches)} match(es) (threshold ≥ {FUZZY_THRESHOLD}).")
 
         logger.info(
             "Batch %s reconciled: %d exact, %d one-to-many, %d fuzzy  (total matched ids: %d)",
@@ -223,6 +253,16 @@ class ReconciliationEngine:
             len(t2_matches),
             len(t3_matches),
             len(matched_ids),
+        )
+        neatlogs.success(
+            f"Batch {self.batch_id}: cascade complete — {len(matched_ids)} records matched, "
+            f"{len(records) - len(matched_ids)} remaining for risk triage.",
+            {
+                "tier1": len(t1_matches),
+                "tier2": len(t2_matches),
+                "tier3": len(t3_matches),
+                "matched": len(matched_ids),
+            },
         )
 
         return ReconciliationResult(
@@ -261,7 +301,7 @@ class ReconciliationEngine:
 
     # ── Pre-Tier-1: Apply DynamicRules ───────────────────────────────────────
 
-    async def _apply_dynamic_rules(self, records: list[_Rec]) -> None:
+    async def _apply_dynamic_rules(self, records: list[_Rec]) -> int:
         """
         Fetch all active DynamicRule rows and apply them to the in-memory
         _Rec list before the matching cascade runs.
@@ -271,6 +311,8 @@ class ReconciliationEngine:
         VENDOR_MAP   → if raw_entity_name.upper() matches pattern,
                         set normalized_entity_name to action_payload[canonical_name]
         FEE_TOLERANCE → stored for reconciler awareness (used in Tier 2 dynamically)
+
+        Returns the number of rules applied to at least one record.
         """
         import re as _re
 
@@ -278,7 +320,7 @@ class ReconciliationEngine:
         rules = rules_result.scalars().all()
 
         if not rules:
-            return
+            return 0
 
         vendor_map: dict[str, str] = {}
         strip_patterns: list[_re.Pattern] = []
@@ -304,6 +346,7 @@ class ReconciliationEngine:
         # Store fee tolerances on engine for Tier 2 use
         self._fee_tolerances = fee_tolerances
 
+        applied = 0
         for rec in records:
             raw = rec.raw_entity_name
             normalized = rec.normalized_entity_name or raw
@@ -313,6 +356,7 @@ class ReconciliationEngine:
             if canonical:
                 rec.normalized_entity_name = canonical
                 logger.debug("VENDOR_MAP: '%s' → '%s'", raw, canonical)
+                applied += 1
                 continue
 
             # 2. REGEX_STRIP — apply each pattern in sequence
@@ -322,7 +366,10 @@ class ReconciliationEngine:
                     logger.debug("REGEX_STRIP: '%s' → '%s'", normalized, new_name)
                     rec.normalized_entity_name = new_name
                     normalized = new_name
+                    applied += 1
                     break
+
+        return applied
 
 
     # ── Tier 1: Exact Key Match ──────────────────────────────────────────────
