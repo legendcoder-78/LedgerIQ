@@ -83,7 +83,7 @@
       <div class="header-left">
         <div class="brand-logo" onclick="showLandingPage()" title="Return to Landing Page">
           <div class="brand-icon">⚡</div>
-          <div class="brand-name">LedgerIQ</div>
+          <div class="brand-name">LedgerIQ <span class="badge badge-info" style="font-size:0.7rem; margin-left:4px; padding:2px 6px;">CFO.AI</span></div>
         </div>
 
         <nav class="nav-tabs">
@@ -102,6 +102,9 @@
           <button class="nav-tab-btn" data-tab="audit">
             <span>🔒</span> Audit Trail
           </button>
+          <button class="nav-tab-btn" data-tab="neatlogs">
+            <span>📜</span> NeatLogs
+          </button>
         </nav>
       </div>
 
@@ -109,7 +112,7 @@
         <!-- Active Batch Selector -->
         <div class="batch-selector-box" title="Active Financial Reconciliation Batch">
           <span style="font-size:0.75rem; color:var(--text-muted); font-weight:600;">BATCH:</span>
-          <select id="active-batch-select">
+          <select id="active-batch-select" class="form-select" style="background: var(--bg-input); border: 1px solid var(--border-color); border-radius: var(--radius-md);">
             <option value="">No Batch</option>
           </select>
         </div>
@@ -122,7 +125,7 @@
 
         <!-- Copilot Trigger -->
         <button id="btn-open-copilot" class="btn btn-primary btn-sm">
-          <span>🤖 Open AI Copilot</span>
+          <span>🤖 CFO.AI Copilot</span>
         </button>
 
         <!-- Theme Toggle -->
@@ -143,11 +146,14 @@
         <div class="section-header">
           <div>
             <h1 class="section-title">Executive Finance Overview</h1>
-            <p class="section-subtitle">Real-time status of multi-source reconciliation, risk matrix, and forward liquidity.</p>
+            <p class="section-subtitle">Real-time status of multi-source reconciliation, risk matrix, and forward liquidity powered by CFO.AI.</p>
           </div>
           <div class="section-controls">
+            <button id="btn-overview-load-sample" class="btn btn-primary">
+              <span>📂 Load CFO.AI Sample Data</span>
+            </button>
             <button id="btn-overview-generate" class="btn btn-secondary">
-              <span>📥 Generate & Ingest Synthetic Batch</span>
+              <span>📥 Generate Synthetic Batch</span>
             </button>
             <button id="btn-overview-view-forecast" class="btn btn-outline">
               <span>📈 View Cash Forecast</span>
@@ -188,6 +194,116 @@
             <div class="kpi-title"><span>Resolved (HITL)</span><span>⚖️</span></div>
             <div id="kpi-resolved" class="kpi-value" style="color:var(--accent-cyan);">0</div>
             <div class="kpi-subtext">Human Approved & Learned</div>
+          </div>
+        </div>
+
+        <!-- Agentic Multi-Agent Loop Panel -->
+        <div class="agentic-flowchart-card">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+            <div>
+              <h2 style="font-size:1.125rem; font-weight:700; display:flex; align-items:center; gap:8px;">
+                <span>🤖 CFO.AI Agentic Multi-Agent Loop</span>
+                <span class="badge badge-info" style="font-size:0.75rem;">Autonomous Pipeline</span>
+              </h2>
+              <p style="font-size:0.8125rem; color:var(--text-secondary); margin-top:2px;">
+                Multi-agent orchestration closing financial reconciliation, LLM diagnostics, and audit logging.
+              </p>
+            </div>
+            <button class="btn btn-outline btn-sm" onclick="switchTab('neatlogs')">
+              <span>📜 View Live NeatLogs</span>
+            </button>
+          </div>
+
+          <!-- Interactive Agentic SVG Flowchart -->
+          <div style="background:var(--bg-tertiary); padding:20px; border-radius:var(--radius-lg); border:1px solid var(--border-color); text-align:center; overflow-x:auto;">
+            <svg class="flowchart-svg" viewBox="0 0 1000 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <!-- Node 1: Ingestion Agent -->
+              <rect x="10" y="30" width="160" height="60" rx="8" fill="#1e293b" stroke="#38bdf8" stroke-width="2"/>
+              <text x="90" y="56" fill="#e2e8f0" font-size="12" font-weight="bold" text-anchor="middle">1. Ingestion Agent</text>
+              <text x="90" y="74" fill="#94a3b8" font-size="10" text-anchor="middle">Ollama Normalizer</text>
+
+              <!-- Connector 1-2 -->
+              <path d="M 170 60 L 230 60" stroke="#38bdf8" stroke-width="2" class="flow-line"/>
+
+              <!-- Node 2: Cascade Reconciler -->
+              <rect x="230" y="30" width="170" height="60" rx="8" fill="#1e293b" stroke="#34d399" stroke-width="2"/>
+              <text x="315" y="56" fill="#e2e8f0" font-size="12" font-weight="bold" text-anchor="middle">2. Reconciler Agent</text>
+              <text x="315" y="74" fill="#94a3b8" font-size="10" text-anchor="middle">3-Tier Cascade Matcher</text>
+
+              <!-- Connector 2-3 -->
+              <path d="M 400 60 L 460 60" stroke="#34d399" stroke-width="2" class="flow-line"/>
+
+              <!-- Node 3: LLM Diagnostic Agent -->
+              <rect x="460" y="30" width="170" height="60" rx="8" fill="#1e293b" stroke="#c084fc" stroke-width="2"/>
+              <text x="545" y="56" fill="#e2e8f0" font-size="12" font-weight="bold" text-anchor="middle">3. Diagnostic Agent</text>
+              <text x="545" y="74" fill="#94a3b8" font-size="10" text-anchor="middle">Kimi-k2.6 LLM Analysis</text>
+
+              <!-- Connector 3-4 -->
+              <path d="M 630 60 L 690 60" stroke="#c084fc" stroke-width="2" class="flow-line"/>
+
+              <!-- Node 4: Rule Synthesizer -->
+              <rect x="690" y="30" width="160" height="60" rx="8" fill="#1e293b" stroke="#fbbf24" stroke-width="2"/>
+              <text x="770" y="56" fill="#e2e8f0" font-size="12" font-weight="bold" text-anchor="middle">4. Rule Synthesizer</text>
+              <text x="770" y="74" fill="#94a3b8" font-size="10" text-anchor="middle">Adaptive HITL Learning</text>
+
+              <!-- Connector 4-5 -->
+              <path d="M 850 60 L 890 60" stroke="#fbbf24" stroke-width="2" class="flow-line"/>
+
+              <!-- Node 5: Audit & Forecast -->
+              <circle cx="935" cy="60" r="32" fill="#1e293b" stroke="#a7f3d0" stroke-width="2"/>
+              <text x="935" y="58" fill="#e2e8f0" font-size="10" font-weight="bold" text-anchor="middle">Audit &</text>
+              <text x="935" y="70" fill="#a7f3d0" font-size="9" text-anchor="middle">Forecast</text>
+            </svg>
+          </div>
+
+          <!-- Live Agent States Grid -->
+          <div class="agentic-grid">
+            <div class="agent-state-card">
+              <div class="agent-header">
+                <div class="agent-title"><span>📥 Ingestion Agent</span></div>
+                <div class="agent-status-pill agent-status-active">● READY</div>
+              </div>
+              <div class="agent-desc">Concurrently ingests Bank, Gateway & ERP data feeds. Runs Ollama entity normalization.</div>
+              <div class="agent-metric" id="agent-metric-ingest">Status: Ready to ingest</div>
+            </div>
+
+            <div class="agent-state-card">
+              <div class="agent-header">
+                <div class="agent-title"><span>⚡ Cascade Reconciler</span></div>
+                <div class="agent-status-pill agent-status-active">● READY</div>
+              </div>
+              <div class="agent-desc">Tier 1 SQL Exact → Tier 2 Subset-Sum Lump → Tier 3 RapidFuzz Fuzzy Matcher.</div>
+              <div class="agent-metric" id="agent-metric-recon">Confidence Band: 0.75 – 1.00</div>
+            </div>
+
+            <div class="agent-state-card">
+              <div class="agent-header">
+                <div class="agent-title"><span>🤖 LLM Diagnostic Agent</span></div>
+                <div class="agent-status-pill agent-status-active">● ONLINE</div>
+              </div>
+              <div class="agent-desc">Kimi-k2.6 cloud LLM root-cause analysis & double-entry journal entry drafting.</div>
+              <div class="agent-metric" id="agent-metric-diag">Model: kimi-k2-0711-preview</div>
+            </div>
+
+            <div class="agent-state-card">
+              <div class="agent-header">
+                <div class="agent-title"><span>🔒 Audit & NeatLogs</span></div>
+                <div class="agent-status-pill agent-status-active">● STREAMING</div>
+              </div>
+              <div class="agent-desc">Cryptographic SHA-256 event chaining & live NeatLogs system telemetry buffer.</div>
+              <div class="agent-metric" id="agent-metric-audit">Engine: NeatLogs v1.0</div>
+            </div>
+          </div>
+
+          <!-- NeatLogs Live Stream Ticker Preview -->
+          <div class="neatlogs-ticker-panel">
+            <div style="display:flex; justify-content:space-between; margin-bottom:8px; font-size:0.75rem; color:#94a3b8; font-weight:bold;">
+              <span>📜 NEATLOGS LIVE TELEMETRY TICKER</span>
+              <span id="neatlogs-ticker-status">STREAMING</span>
+            </div>
+            <div id="neatlogs-ticker-content">
+              <div>[NeatLogs][INFO][System] LedgerIQ | CFO.AI Autonomous Agentic Engine Active</div>
+            </div>
           </div>
         </div>
 
@@ -637,6 +753,46 @@
               </tbody>
             </table>
           </div>
+        </div>
+      </section>
+
+      <!-- ── SECTION 6: NEATLOGS TELEMETRY STREAM ────────────────────────────── -->
+      <section id="section-neatlogs" class="page-section">
+        <div class="section-header">
+          <div>
+            <h1 class="section-title">NeatLogs Structured Telemetry</h1>
+            <p class="section-subtitle">Real-time system events, database queries, reconciliation engine decisions, and CFO.AI logs.</p>
+          </div>
+          <div class="section-controls">
+            <button id="btn-neatlogs-refresh" class="btn btn-secondary">
+              <span>🔄 Refresh Stream</span>
+            </button>
+            <button id="btn-neatlogs-clear" class="btn btn-outline">
+              <span>🗑️ Clear Log Stream</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="glass-panel" style="padding:16px; margin-bottom:20px; display:flex; gap:16px; align-items:center;">
+          <div style="flex:1;">
+            <input type="text" id="neatlogs-search-input" class="input-field" placeholder="Search logs (e.g. ReconciliationEngine, CFO.AI, Database, SUCCESS, ERROR)..." style="width:100%; background: var(--bg-input); border: 1px solid var(--border-color); border-radius: var(--radius-md);">
+          </div>
+          <div style="width:220px;">
+            <select id="neatlogs-category-filter" class="input-field" style="background: var(--bg-input); border: 1px solid var(--border-color); border-radius: var(--radius-md);">
+              <option value="ALL">All Categories</option>
+              <option value="System">System</option>
+              <option value="Database">Database</option>
+              <option value="Ingestion">Ingestion</option>
+              <option value="ReconciliationEngine">Reconciliation Engine</option>
+              <option value="CFO.AI">CFO.AI</option>
+              <option value="AuditChain">Audit Chain</option>
+              <option value="HTTP">HTTP Middleware</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="glass-panel" style="padding:20px; background:#0d1117; color:#e6edf3; font-family:'Consolas', 'Courier New', monospace; font-size:0.875rem; min-height:500px; max-height:650px; overflow-y:auto; border:1px solid #30363d; border-radius:8px;" id="neatlogs-console-body">
+          <div style="color:var(--text-muted);">Connecting to NeatLogs stream...</div>
         </div>
       </section>
 

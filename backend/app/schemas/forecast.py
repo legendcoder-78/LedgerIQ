@@ -34,6 +34,10 @@ class LiquidityRiskMetric(BaseModel):
     medium_risk_exposure: float
     low_risk_exposure: float
 
+    # UI-facing convenience fields
+    min_projected_balance: float = 0.0          # alias of minimum_balance
+    risk_level: str = "HEALTHY"                 # HEALTHY | CAUTION | CRITICAL
+
 
 class RunwayOut(BaseModel):
     batch_id: uuid.UUID
@@ -41,6 +45,9 @@ class RunwayOut(BaseModel):
     forecast_horizon_days: int
     projection: list[ForecastDataPoint]
     liquidity_risk: LiquidityRiskMetric
+
+    # UI-facing convenience alias for `projection`
+    daily_projection: list[ForecastDataPoint] = []
 
 
 # ---------------------------------------------------------------------------
@@ -67,6 +74,14 @@ class RunwayDelta(BaseModel):
     delta_pct: float
 
 
+class SimulationDeltaSummary(BaseModel):
+    """Headline impact of a what-if scenario (UI-facing)."""
+    net_cash_variance: float = 0.0      # signed worst/bottom-line delta
+    min_cash: float = 0.0               # lowest simulated balance
+    days_to_zero: Optional[int] = None  # first stressed day ≤ 0, else None
+    summary: str = ""
+
+
 class SimulationOut(BaseModel):
     batch_id: uuid.UUID
     parameters: SimulationRequest
@@ -76,3 +91,8 @@ class SimulationOut(BaseModel):
     summary: str    # e.g. "Cash position reduced by ₹45,000 at Day 15"
     max_negative_impact_day: Optional[int]
     max_negative_impact_amount: float
+
+    # UI-facing convenience shapes
+    time_series: list[ForecastDataPoint] = []          # alias of `simulated`
+    delta: SimulationDeltaSummary = SimulationDeltaSummary()
+    simulated_summary: SimulationDeltaSummary = SimulationDeltaSummary()

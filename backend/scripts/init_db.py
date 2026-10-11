@@ -1,17 +1,7 @@
 """
 scripts/init_db.py
 ==================
-One-time database initialisation script.
-
-What it does:
-  1. Connects to Neon Serverless PostgreSQL.
-  2. Creates required extensions: uuid-ossp, pg_trgm.
-  3. Drops all existing tables and recreates them cleanly from SQLAlchemy models.
-
-Run from the backend/ directory:
-    python scripts/init_db.py
-
-WARNING: This will DROP and recreate all tables. Do NOT run on production data.
+One-time database initialisation script for LedgerIQ | CFO.AI.
 """
 
 import asyncio
@@ -27,41 +17,39 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from app.config import settings
 from app.db.models import Base
 from app.db.session import _sanitize_database_url
+from app.neatlogs import neatlogs
 
 
 async def init_db() -> None:
     db_url = _sanitize_database_url(settings.DATABASE_URL)
-    print(f"🔗 Connecting to: {db_url[:60]}...")
+    neatlogs.info("Database", f"Connecting to: {db_url[:60]}...")
 
-    engine = create_async_engine(
-        db_url,
-        echo=True,
-        pool_pre_ping=True,
-    )
+    try:
+        engine = create_async_engine(db_url, echo=False, pool_pre_ping=True)
+        async with engine.begin() as conn:
+            # Check dialect
+            if engine.dialect.name == "postgresql":
+                neatlogs.info("Database", "Creating PostgreSQL extensions: uuid-ossp, pg_trgm...")
+                try:
+                    await conn.execute(text('CREATE EXTENSION IF NOT EXISTS "uuid-ossp";'))
+                    await conn.execute(text("CREATE EXTENSION IF NOT EXISTS pg_trgm;"))
+                except Exception as ext_err:
+                    neatlogs.warn("Database", f"Extension creation warning (safe to ignore if non-superuser): {ext_err}")
 
-    async with engine.begin() as conn:
-        # ── Enable required PostgreSQL extensions ────────────────────────────
-        print("📦 Creating extensions: uuid-ossp, pg_trgm...")
-        await conn.execute(
-            text('CREATE EXTENSION IF NOT EXISTS "uuid-ossp";')
-        )
-        await conn.execute(
-            text("CREATE EXTENSION IF NOT EXISTS pg_trgm;")
-        )
+            neatlogs.info("Database", "Creating all tables from SQLAlchemy models...")
+            await conn.run_sync(Base.metadata.create_all)
 
-        # ── Drop all tables and recreate from models ─────────────────────────
-        print("🗑️  Dropping existing tables...")
-        await conn.run_sync(Base.metadata.drop_all)
+        await engine.dispose()
+        neatlogs.success("Database", "Database initialized successfully!")
 
-        print("🏗️  Creating all tables from SQLAlchemy models...")
-        await conn.run_sync(Base.metadata.create_all)
-
-    await engine.dispose()
-
-    print("\n✅ Database initialized successfully!")
-    print("   Tables created:")
-    for table in Base.metadata.sorted_tables:
-        print(f"     • {table.name}")
+    except Exception as exc:
+        neatlogs.warn("Database", f"Primary database connection failed ({exc}). Initializing local SQLite database...")
+        sqlite_url = "sqlite+aiosqlite:///./ledgeriq.db"
+        engine = create_async_engine(sqlite_url, echo=False)
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        await engine.dispose()
+        neatlogs.success("Database", "Local SQLite database initialized successfully at ledgeriq.db!")
 
 
 if __name__ == "__main__":
