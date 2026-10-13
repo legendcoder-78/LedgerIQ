@@ -233,8 +233,6 @@ Follow the full interactive demo walkthrough documented in **[`demo.md`](file://
 ## 📄 License
 Built for the **Razorpay Buildathon 2026** — Track 04 (AI Finance Controller).
 Distributed under the MIT License.
-
----
 ## 📡 NeatLogs & CFO.AI Integration
 
 ### NeatLogs Structured Telemetry
@@ -281,5 +279,3 @@ Stages:
 3. **FORECAST** — 30-day cash runway + liquidity posture (FORECASTER)
 
 Returns per-stage status, metrics, overall result, and writes immutable audit + NeatLogs telemetry.
-
----
